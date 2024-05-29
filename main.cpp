@@ -36,6 +36,7 @@ private:
     GLFWwindow* window;
 
     VkInstance instance;
+    VkPhysicalDevice physicalDevice{ VK_NULL_HANDLE };
 
     std::vector<VkLayerProperties> getSupportedValidationLayers()
     {
@@ -123,6 +124,69 @@ private:
     void initVulkan() 
     {
         createInstance();
+        pickPhysicalDevice();
+    }
+
+    void pickPhysicalDevice()
+    {
+        uint32_t deviceCount{ 0 };
+        vkEnumeratePhysicalDevices(this->instance, &deviceCount, nullptr);
+
+        if (deviceCount == 0)
+            throw std::runtime_error("Failed to find GPU with Vulkan support.");
+    
+        std::vector<VkPhysicalDevice> devices{ deviceCount };
+        vkEnumeratePhysicalDevices(this->instance, &deviceCount, devices.data());
+
+        for (const VkPhysicalDevice& device : devices)
+        {
+            VkPhysicalDeviceProperties deviceProperties;
+            vkGetPhysicalDeviceProperties(device, &deviceProperties);
+            printDeviceProperties(deviceProperties);
+        }
+
+        for (const VkPhysicalDevice& device : devices)
+            if (isDeviceSuitable(device))
+            {
+                this->physicalDevice = device;
+                break;
+            }
+
+        if (physicalDevice == VK_NULL_HANDLE)
+            throw std::runtime_error("Failed to find suitable GPU.");
+    }
+
+    bool isDeviceSuitable(VkPhysicalDevice device)
+    {
+        VkPhysicalDeviceProperties deviceProperties;
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+        return true;
+    }
+
+    void printDeviceProperties(const VkPhysicalDeviceProperties& p)
+    {
+        std::cout << "API Version: \t\t" << p.apiVersion <<
+            "\nDriver Version: \t\t" << p.driverVersion <<
+            "\nVendor ID: \t\t" << p.vendorID <<
+            "\nDevice ID: \t\t" << p.deviceID <<
+            "\nDevice Type: \t\t" << toString(p.deviceType) <<
+            "\nDevice Name: \t\t" << p.deviceName <<
+            "\nPipeline Cache UUID: \t\t" << p.pipelineCacheUUID <<
+            "\nLimits: \t\t(This is a giant struct)" <<
+            "\nSpace Properties: \t\t(Smaller random struct)\n\n";
+    }
+
+    std::string_view toString(VkPhysicalDeviceType type)
+    {
+        switch (type)
+        {
+            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:    return "Integrated GPU";
+            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:      return "GPU";
+            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:       return "Virtual GPU";
+            case VK_PHYSICAL_DEVICE_TYPE_CPU:               return "CPU";
+            default:                                        return "Other";
+        }
     }
 
     void createInstance()
