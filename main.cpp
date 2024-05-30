@@ -3,6 +3,8 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -37,6 +39,41 @@ private:
 
     VkInstance instance;
     VkPhysicalDevice physicalDevice{ VK_NULL_HANDLE };
+
+    struct QueueFamilyIndices
+    {
+        std::optional<uint32_t> graphicsFamily;
+
+        bool isComplete() const
+        {
+            return graphicsFamily.has_value();
+        }
+    };
+
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+        QueueFamilyIndices indices;
+
+        uint32_t queueFamilyCount{};
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queueFamilies{ queueFamilyCount };
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+        // find a queue family which supports 
+        int i{};
+        for (const VkQueueFamilyProperties& queueFamily : queueFamilies) 
+        {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) 
+                indices.graphicsFamily = i;
+            
+            if (indices.isComplete())
+                break;
+
+            i++;
+        }
+
+        return indices;
+    }
 
     std::vector<VkLayerProperties> getSupportedValidationLayers()
     {
@@ -145,23 +182,50 @@ private:
             printDeviceProperties(deviceProperties);
         }
 
-        for (const VkPhysicalDevice& device : devices)
-            if (isDeviceSuitable(device))
-            {
-                this->physicalDevice = device;
-                break;
-            }
+        std::multimap<int, VkPhysicalDevice> candidates;
 
-        if (physicalDevice == VK_NULL_HANDLE)
+        // rate all devices
+        for (const VkPhysicalDevice& device : devices)
+        {
+            const int score{ rateDeviceSuitability(device) };
+            candidates.insert(std::make_pair(score, device));
+        }
+
+        const int bestCandidateScore{ candidates.rbegin()->first };
+        const VkPhysicalDevice bestCandidateDevice{ candidates.rbegin()->second };
+
+        const bool isBestCandidateSuitable{ 
+            isDeviceSuitable(bestCandidateDevice)
+        };
+
+        if (isBestCandidateSuitable)
+            physicalDevice = bestCandidateDevice;
+        else
             throw std::runtime_error("Failed to find suitable GPU.");
+    }
+
+    int rateDeviceSuitability(VkPhysicalDevice device)
+    {
+        VkPhysicalDeviceProperties deviceProperties;
+        VkPhysicalDeviceFeatures deviceFeatures;
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+        int rating{};
+
+        // TODO give more robust rating for GPU
+
+        if (deviceFeatures.geometryShader)
+            rating += 100;
+
+        return rating;
     }
 
     bool isDeviceSuitable(VkPhysicalDevice device)
     {
-        VkPhysicalDeviceProperties deviceProperties;
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        const QueueFamilyIndices indices{ findQueueFamilies(device) };
 
-        return true;
+        return indices.isComplete();
     }
 
     void printDeviceProperties(const VkPhysicalDeviceProperties& p)
