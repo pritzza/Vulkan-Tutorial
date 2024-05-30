@@ -2,6 +2,7 @@
 /Debug
 /Release
 /x64
+/Vulkan-Tutorial
 
 # Visual Studio Project Files
 .vs/
